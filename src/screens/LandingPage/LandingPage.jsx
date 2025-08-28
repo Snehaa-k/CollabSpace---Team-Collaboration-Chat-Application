@@ -1,5 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { ArrowRight, Users, MessageSquare, CheckSquare, Zap, Star, ArrowUp } from "lucide-react";
+import { useLoginMutation, useRegisterMutation } from '../../store/api/authApi';
+import { useDispatch } from 'react-redux';
+import { setUser } from '../../store/slices/authSlice';
+import toast, { Toaster } from 'react-hot-toast';
 
 const useScrollAnimation = (threshold = 0.2) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -124,6 +128,21 @@ const StatCard = ({ stat, index }) => {
 
 export function LandingPage({ onLogin }) {
   const [isScrolled, setIsScrolled] = useState(false);
+  const [login, { isLoading: isLoginLoading }] = useLoginMutation();
+  const [register, { isLoading: isRegisterLoading }] = useRegisterMutation();
+  const dispatch = useDispatch();
+
+  const [formData, setFormData] = useState({
+    username: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+  const [error, setError] = useState('');
+  
+  const isLoading = isLoginLoading || isRegisterLoading;
+
+
 
   useEffect(() => {
     const handleScroll = () => {
@@ -132,6 +151,53 @@ export function LandingPage({ onLogin }) {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+
+
+
+  const handleInputChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value
+    });
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!isLogin && formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        const result = await login({
+          email: formData.email,
+          password: formData.password
+        }).unwrap();
+        dispatch(setUser(result.user));
+        toast.success('Login successful!');
+        onLogin();
+      } else {
+        await register({
+          username: formData.username,
+          email: formData.email,
+          password: formData.password
+        }).unwrap();
+        toast.success('Registration successful! Please login with your credentials.');
+        setIsLogin(true);
+        setFormData({ username: '', email: '', password: '', confirmPassword: '' });
+      }
+    } catch (err) {
+      const errorMessage = err.data?.message || (isLogin ? 'Login failed' : 'Registration failed');
+      setError(errorMessage);
+      toast.error(errorMessage);
+    }
+  };
+
 
   const navigationItems = [
     { label: "Features", href: "#features" },
@@ -142,6 +208,7 @@ export function LandingPage({ onLogin }) {
 
   const [showModal, setShowModal] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
+  
 
   const handleGetStarted = () => {
     setShowModal(true);
@@ -419,27 +486,53 @@ export function LandingPage({ onLogin }) {
                 </p>
               </div>
               
-              <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
+              <form className="space-y-4" onSubmit={handleSubmit}>
                 {!isLogin && (
                   <input
+                    name="username"
                     type="text"
+                    value={formData.username}
+                    onChange={handleInputChange}
                     placeholder="Full Name"
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#260f5c] focus:border-transparent"
+                    required
                   />
                 )}
                 <input
+                  name="email"
                   type="email"
                   placeholder="Email Address"
+                  value={formData.email}
+                  onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#260f5c] focus:border-transparent"
+                  required
                 />
                 <input
+                  name="password"
                   type="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
                   placeholder="Password"
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#260f5c] focus:border-transparent"
+                  required
                 />
+                {!isLogin && (
+                  <input
+                    name="confirmPassword"
+                    type="password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    placeholder="Confirm Password"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#260f5c] focus:border-transparent"
+                    required
+                  />
+                )}
+                 {error && (
+                  <div className="text-red-600 text-sm text-center">{error}</div>
+                )}
                 
-                <Button type="submit" className="w-full py-3 bg-[#260f5c] text-white rounded-xl hover:bg-[#1a0a3d] transition-all">
-                  {isLogin ? 'Sign In' : 'Create Account'}
+                <Button type="submit" disabled={isLoading}  className="w-full py-3 bg-[#260f5c] text-white rounded-xl hover:bg-[#1a0a3d] transition-all">
+                  {isLoading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
                 </Button>
               </form>
               
@@ -475,6 +568,28 @@ export function LandingPage({ onLogin }) {
           </div>
         </footer>
       </div>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: '#363636',
+            color: '#fff',
+          },
+          success: {
+            duration: 3000,
+            theme: {
+              primary: '#4aed88',
+            },
+          },
+          error: {
+            duration: 4000,
+            theme: {
+              primary: '#ff4b4b',
+            },
+          },
+        }}
+      />
     </main>
   );
 }
