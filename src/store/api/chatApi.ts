@@ -1,79 +1,115 @@
-import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import { chatService } from '../../services/chatService';
+import { Room, Message } from '../../types/index';
 
-interface Room {
-  id: string;
-  name: string;
-  description: string;
-  members: string[];
-  createdAt: string;
+interface ChatState {
+  rooms: Room[];
+  messages: { [roomId: string]: Message[] };
+  loading: boolean;
+  error: string | null;
 }
 
-interface Message {
-  id: string;
-  sender: string;
-  content: string;
-  timestamp: string;
-  isOwn: boolean;
-}
+const initialState: ChatState = {
+  rooms: [],
+  messages: {},
+  loading: false,
+  error: null,
+};
 
-interface CreateRoomRequest {
-  name: string;
-  description: string;
-  invitedUsers: string[];
-}
+export const fetchRooms = createAsyncThunk(
+  'chat/fetchRooms',
+  async () => {
+    console.log('fetchRooms thunk called');
+    try {
+      const result = await chatService.getRooms();
+      console.log('fetchRooms result:', result);
+      console.log('Returning from thunk:', result);
+      return result;
+    } catch (error) {
+      console.error('fetchRooms thunk error:', error);
+      throw error;
+    }
+  }
+);
 
-interface SendMessageRequest {
-  roomId: string;
-  message: string;
-}
+export const createRoom = createAsyncThunk(
+  'chat/createRoom',
+  async (roomData: { name: string; description: string; invitedUsers: string[] }) => {
+    return await chatService.createRoom(roomData);
+  }
+);
 
-export const chatApi = createApi({
-  reducerPath: 'chatApi',
-  baseQuery: fetchBaseQuery({
-    baseUrl: 'http://127.0.0.1:8000/api/chat',
-    credentials: 'include',
-  }),
-  tagTypes: ['Room', 'Message'],
-  endpoints: (builder) => ({
-    getRooms: builder.query<Room[], void>({
-      query: () => '/rooms',
-      providesTags: ['Room'],
-    }),
-    createRoom: builder.mutation<Room, CreateRoomRequest>({
-      query: (roomData) => ({
-        url: '/rooms',
-        method: 'POST',
-        body: roomData,
-      }),
-      invalidatesTags: ['Room'],
-    }),
-    getMessages: builder.query<Message[], string>({
-      query: (roomId) => `/rooms/${roomId}/messages`,
-      providesTags: ['Message'],
-    }),
-    sendMessage: builder.mutation<Message, SendMessageRequest>({
-      query: ({ roomId, message }) => ({
-        url: `/rooms/${roomId}/messages`,
-        method: 'POST',
-        body: { message },
-      }),
-      invalidatesTags: ['Message'],
-    }),
-    inviteToRoom: builder.mutation<{ message: string }, { roomId: string; emails: string[] }>({
-      query: ({ roomId, emails }) => ({
-        url: `/rooms/${roomId}/invite`,
-        method: 'POST',
-        body: { emails },
-      }),
-      invalidatesTags: ['Room'],
-    }),
-  }),
+export const fetchMessages = createAsyncThunk(
+  'chat/fetchMessages',
+  async (roomId: string) => {
+    const messages = await chatService.getMessages(roomId);
+    return { roomId, messages };
+  }
+);
+
+export const sendMessage = createAsyncThunk(
+  'chat/sendMessage',
+  async ({ roomId, message }: { roomId: string; message: string }) => {
+    const newMessage = await chatService.sendMessage({ roomId, message });
+    return { roomId, message: newMessage };
+  }
+);
+
+const chatSlice = createSlice({
+  name: 'chat',
+  initialState,
+  reducers: {
+    clearError: (state) => {
+      state.error = null;
+    }
+  },
+  extraReducers: (builder) => {
+    builder
+      // Fetch Rooms
+      .addCase(fetchRooms.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchRooms.fulfilled, (state, action) => {
+        console.log('fetchRooms fulfilled - action:', action);
+        console.log('fetchRooms fulfilled - payload:', action.payload);
+        console.log('fetchRooms fulfilled - payload type:', typeof action.payload);
+        console.log('fetchRooms fulfilled - is array:', Array.isArray(action.payload));
+        state.loading = false;
+        state.rooms = Array.isArray(action.payload) ? action.payload : [];
+        console.log('Updated rooms in state:', state.rooms);
+        console.log('State after update:', JSON.stringify(state));
+      })
+      .addCase(fetchRooms.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Failed to fetch rooms';
+        console.error('fetchRooms rejected:', action.error);
+      })
+      // Create Room
+      .addCase(createRoom.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createRoom.fulfilled, (state, action) => {
+        state.loading = false;
+        state.rooms.push(action.payload);
+      })
+      .addCase(createRoom.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.error.message || 'Failed to create room';
+      })
+      // Messages
+      .addCase(fetchMessages.fulfilled, (state, action) => {
+        state.messages[action.payload.roomId] = action.payload.messages;
+      })
+      .addCase(sendMessage.fulfilled, (state, action) => {
+        const { roomId, message } = action.payload;
+        if (!state.messages[roomId]) {
+          state.messages[roomId] = [];
+        }
+        state.messages[roomId].push(message);
+      });
+  },
 });
 
-export const { 
-  useGetRoomsQuery, 
-  useCreateRoomMutation, 
-  useGetMessagesQuery, 
-  useSendMessageMutation,
-  useInviteToRoomMutation
-} = chatApi;
+export default chatSlice.reducer;

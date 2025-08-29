@@ -1,35 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { LandingPage } from "./screens/LandingPage/LandingPage";
 import ChatPage from './screens/ChatPage/ChatPage.jsx';
 import WelcomePage from './screens/WelcomePage/WelcomePage.jsx';
+import ProtectedRoute from './components/ProtectedRoute.jsx';
+import { setUser } from './store/slices/authSlice';
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [userRooms, setUserRooms] = useState([]);
-  const handleLogin = () => {
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('user');
+    if (savedUser) {
+      const user = JSON.parse(savedUser);
+      dispatch(setUser(user));
+      setIsLoggedIn(true);
+    }
+  }, [dispatch]);
+
+  const handleLogin = (user) => {
+    localStorage.setItem('user', JSON.stringify(user));
     setIsLoggedIn(true);
-    // Start with no rooms for first-time users
   };
 
-  const handleRoomCreated = (room) => {
-    const newRoom = {
-      ...room,
-      id: userRooms.length + 1
-    };
-    setUserRooms([...userRooms, newRoom]);
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setIsLoggedIn(false);
   };
 
   return (
-    <div className="App">
-      {!isLoggedIn ? (
-        <LandingPage onLogin={handleLogin} />
-      ) : (
-        <ChatPage 
-          userRooms={userRooms}
-          onRoomCreated={handleRoomCreated}
-        />
-      )}
-    </div>
+    <Router>
+      <div className="App">
+        <Routes>
+          <Route 
+            path="/" 
+            element={
+              isLoggedIn ? (
+                <Navigate to="/chat" replace />
+              ) : (
+                <LandingPage onLogin={handleLogin} />
+              )
+            } 
+          />
+          <Route 
+            path="/chat" 
+            element={
+              <ProtectedRoute>
+                <ChatPage onLogout={handleLogout} />
+              </ProtectedRoute>
+            } 
+          />
+
+        </Routes>
+      </div>
+    </Router>
   );
 }
 

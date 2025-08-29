@@ -180,7 +180,7 @@ export function LandingPage({ onLogin }) {
         }).unwrap();
         dispatch(setUser(result.user));
         toast.success('Login successful!');
-        onLogin();
+        onLogin(result.user);
       } else {
         await register({
           username: formData.username,
@@ -188,6 +188,14 @@ export function LandingPage({ onLogin }) {
           password: formData.password
         }).unwrap();
         toast.success('Registration successful! Please login with your credentials.');
+        
+        const pendingInvitation = localStorage.getItem('pendingInvitation');
+        if (pendingInvitation) {
+          localStorage.removeItem('pendingInvitation');
+          window.location.href = `/invite/${pendingInvitation}`;
+          return;
+        }
+        
         setIsLogin(true);
         setFormData({ username: '', email: '', password: '', confirmPassword: '' });
       }
@@ -208,6 +216,18 @@ export function LandingPage({ onLogin }) {
 
   const [showModal, setShowModal] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const email = urlParams.get('email');
+    const signup = urlParams.get('signup');
+    
+    if (email && signup) {
+      setFormData(prev => ({ ...prev, email }));
+      setIsLogin(false);
+      setShowModal(true);
+    }
+  }, []);
   
 
   const handleGetStarted = () => {

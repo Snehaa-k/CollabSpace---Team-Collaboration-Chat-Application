@@ -1,11 +1,10 @@
 import { configureStore, combineReducers } from '@reduxjs/toolkit';
 import { TypedUseSelectorHook, useDispatch as useAppDispatch, useSelector as useAppSelector } from 'react-redux';
 import authReducer from './slices/authSlice';
-import chatReducer from './slices/chatSlice';
+import chatReducer from './api/chatApi';
 import roomReducer from './slices/roomSlice';
 import taskReducer from './slices/taskSlice';
 import { authApi } from './api/authApi';
-import { chatApi } from './api/chatApi';
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -13,7 +12,6 @@ const rootReducer = combineReducers({
   rooms: roomReducer,
   tasks: taskReducer,
   [authApi.reducerPath]: authApi.reducer,
-  [chatApi.reducerPath]: chatApi.reducer,
 });
 
 export const store = configureStore({
@@ -22,7 +20,7 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: false,
       immutableCheck: false,
-    }).concat(authApi.middleware, chatApi.middleware),
+    }).concat(authApi.middleware),
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

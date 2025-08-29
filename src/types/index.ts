@@ -57,3 +57,14 @@ export interface RegisterData {
   email: string;
   password: string;
 }
+
+export interface CreateRoomRequest {
+  name: string;
+  description: string;
+  invitedUsers: string[];
+}
+
+export interface SendMessageRequest {
+  roomId: string;
+  message: string;
+}
