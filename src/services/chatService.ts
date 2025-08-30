@@ -32,4 +32,9 @@ export const chatService = {
     const response = await axiosServices.post(`/api/chat/rooms/${roomId}/invite/`, { emails });
     return response.data;
   },
+
+  deleteRoom: async (roomId: string) => {
+    const response = await axiosServices.delete(`/rooms/${roomId}/`);
+    return response.data;
+  },
 };

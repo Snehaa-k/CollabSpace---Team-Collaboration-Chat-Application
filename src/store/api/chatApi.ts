@@ -39,6 +39,14 @@ export const createRoom = createAsyncThunk(
   }
 );
 
+export const deleteRoom = createAsyncThunk(
+  'chat/deleteRoom',
+  async (roomId: string) => {
+    await chatService.deleteRoom(roomId);
+    return roomId;
+  }
+);
+
 export const fetchMessages = createAsyncThunk(
   'chat/fetchMessages',
   async (roomId: string) => {
@@ -97,6 +105,10 @@ const chatSlice = createSlice({
       .addCase(createRoom.rejected, (state, action) => {
         state.loading = false;
         state.error = action.error.message || 'Failed to create room';
+      })
+      // Delete Room
+      .addCase(deleteRoom.fulfilled, (state, action) => {
+        state.rooms = state.rooms.filter(room => room.id !== action.payload);
       })
       // Messages
       .addCase(fetchMessages.fulfilled, (state, action) => {

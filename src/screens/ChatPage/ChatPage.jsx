@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Send, Search, MoreVertical, Phone, Video, Settings, Users, Smile, Paperclip, X, Bell } from 'lucide-react';
-import { useLogoutMutation } from '../../store/api/authApi';
+import { Send, Search, MoreVertical, Phone, Video, Settings, Users, Smile, Paperclip, X, Bell, Edit, UserPlus, UserMinus, Trash2 } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
-import { createRoom, fetchRooms } from '../../store/api/chatApi';
+import { createRoom, fetchRooms, deleteRoom } from '../../store/api/chatApi';
+import { logout } from '../../store/slices/authSlice';
 
 const mockMessages = [
   {
@@ -27,7 +27,7 @@ export default function ChatPage({ onLogout }) {
   const dispatch = useDispatch();
   const { rooms = [], loading } = useSelector((state) => state.chat);
   const { user } = useSelector((state) => state.auth);
-  const [logout] = useLogoutMutation();
+
 
   // UI State
   const [selectedChat, setSelectedChat] = useState(null);
@@ -37,8 +37,10 @@ export default function ChatPage({ onLogout }) {
   // Modal states
   const [showProfile, setShowProfile] = useState(false);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
-  console.log(rooms , "rooms");
+  const [showEditRoom, setShowEditRoom] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(null);
   
+  console.log(rooms , "rooms");
 
   // Convert rooms to conversation format
   const roomConversations = rooms.map(room => ({
@@ -52,7 +54,9 @@ export default function ChatPage({ onLogout }) {
       : '',
     unread: 0,
     members: room.members?.length || 1,
-    isOwner: room.created_by === user?.id
+    isOwner: room.created_by === user?.id,
+    membersList: room.members || [],
+    description: room.description
   }));
 
   useEffect(() => {
@@ -87,14 +91,41 @@ export default function ChatPage({ onLogout }) {
     }
   };
 
-  const handleLogout = async () => {
+  const handleEditRoom = (room) => {
+    setEditingRoom(room);
+    setShowEditRoom(true);
+  };
+
+  const handleRoomUpdated = async (updatedRoomData) => {
     try {
-      await logout().unwrap();
+      // TODO: Implement room update API call
+      console.log('Updating room:', updatedRoomData);
+      dispatch(fetchRooms());
+      setShowEditRoom(false);
+      setEditingRoom(null);
     } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      onLogout();
+      console.error('Error updating room:', error);
     }
+  };
+
+  const handleDeleteRoom = async (roomId) => {
+    if (window.confirm('Are you sure you want to delete this room? This action cannot be undone.')) {
+      try {
+        await dispatch(deleteRoom(roomId)).unwrap();
+        if (selectedChat?.id === roomId) {
+          setSelectedChat(null);
+        }
+      } catch (error) {
+        console.error('Error deleting room:', error);
+      }
+    }
+  };
+
+
+
+  const handleLogout = () => {
+    dispatch(logout());
+    onLogout();
   };
 
   if (loading) {
@@ -133,15 +164,25 @@ export default function ChatPage({ onLogout }) {
             </div>
           </div>
           
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-            />
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search conversations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+            
+            <button 
+              onClick={() => setShowCreateRoom(true)}
+              className="w-full flex items-center justify-center space-x-2 p-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Users className="w-4 h-4" />
+              <span>Create Room</span>
+            </button>
           </div>
         </div>
 
@@ -153,12 +194,14 @@ export default function ChatPage({ onLogout }) {
             .map((conversation) => (
             <div
               key={conversation.id}
-              onClick={() => setSelectedChat(conversation)}
-              className={`p-4 border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 ${
+              className={`p-4 border-b border-gray-100 cursor-pointer transition-colors hover:bg-gray-50 relative group ${
                 selectedChat?.id === conversation.id ? 'bg-blue-50 border-r-3 border-r-blue-500' : ''
               }`}
             >
-              <div className="flex items-center space-x-3">
+              <div 
+                onClick={() => setSelectedChat(conversation)}
+                className="flex items-center space-x-3"
+              >
                 <div className="w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
                   {conversation.avatar}
                 </div>
@@ -183,6 +226,36 @@ export default function ChatPage({ onLogout }) {
                   </div>
                 )}
               </div>
+              
+              {/* Action buttons for room owners */}
+              {conversation.isOwner && (
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                  <div className="flex items-center space-x-1 bg-white rounded-lg shadow-sm border border-gray-200 p-1">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditRoom(conversation);
+                      }}
+                      className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-150"
+                      title="Edit room"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-gray-200"></div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteRoom(conversation.id);
+                      }}
+                      className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-150"
+                      title="Delete room"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
             </div>
           ))}
           
@@ -227,6 +300,15 @@ export default function ChatPage({ onLogout }) {
                   <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
                     <Users className="w-5 h-5" />
                   </button>
+                  {selectedChat.isOwner && (
+                    <button 
+                      onClick={() => handleEditRoom(selectedChat)}
+                      className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+                      title="Edit room"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </button>
+                  )}
                   <button className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg">
                     <MoreVertical className="w-5 h-5" />
                   </button>
@@ -342,10 +424,13 @@ export default function ChatPage({ onLogout }) {
                   setShowProfile(false);
                   setShowCreateRoom(true);
                 }}
-                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+                className="w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium flex items-center justify-center space-x-2"
               >
-                Create Chat Room
+                <Users className="w-4 h-4" />
+                <span>Create Chat Room</span>
               </button>
+              
+
               
               <button
                 onClick={handleLogout}
@@ -377,7 +462,36 @@ export default function ChatPage({ onLogout }) {
         </div>
       )}
 
-      {/* Invitations Modal - Remove this entire section */}
+      {/* Edit Room Modal */}
+      {showEditRoom && editingRoom && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Room</h3>
+              <button 
+                onClick={() => {
+                  setShowEditRoom(false);
+                  setEditingRoom(null);
+                }}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <EditRoomForm 
+              room={editingRoom} 
+              onClose={() => {
+                setShowEditRoom(false);
+                setEditingRoom(null);
+              }} 
+              onRoomUpdated={handleRoomUpdated} 
+            />
+          </div>
+        </div>
+      )}
+
+
     </div>
   );
 }
@@ -490,3 +604,156 @@ function CreateRoomForm({ onClose, onRoomCreated }) {
     </form>
   );
 }
+
+function EditRoomForm({ room, onClose, onRoomUpdated }) {
+  const [roomName, setRoomName] = useState(room.name);
+  const [description, setDescription] = useState(room.description || '');
+  const [currentMembers, setCurrentMembers] = useState(room.membersList || []);
+  const [newInviteEmails, setNewInviteEmails] = useState(['']);
+  const [loading, setLoading] = useState(false);
+
+  const addEmailField = () => {
+    setNewInviteEmails([...newInviteEmails, '']);
+  };
+
+  const removeEmailField = (index) => {
+    setNewInviteEmails(newInviteEmails.filter((_, i) => i !== index));
+  };
+
+  const updateEmail = (index, value) => {
+    const updated = [...newInviteEmails];
+    updated[index] = value;
+    setNewInviteEmails(updated);
+  };
+
+  const removeMember = (memberToRemove) => {
+    setCurrentMembers(currentMembers.filter(member => member.id !== memberToRemove.id));
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const validEmails = newInviteEmails.filter(email => email.trim());
+    
+    const updatedRoomData = {
+      id: room.id,
+      name: roomName,
+      description,
+      currentMembers,
+      newInvites: validEmails
+    };
+    
+    try {
+      await onRoomUpdated(updatedRoomData);
+    } catch (error) {
+      console.error('Failed to update room:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Room Details */}
+      <div className="space-y-4">
+        <h4 className="font-medium text-gray-900">Room Details</h4>
+        <input
+          type="text"
+          value={roomName}
+          onChange={(e) => setRoomName(e.target.value)}
+          placeholder="Room Name"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          required
+        />
+        
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Room Description"
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none text-sm"
+        />
+      </div>
+
+      {/* Current Members */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-gray-900">Current Members ({currentMembers.length})</h4>
+        <div className="max-h-32 overflow-y-auto space-y-2">
+          {currentMembers.map((member, index) => (
+            <div key={member.id || index} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center text-white text-xs">
+                  {member.name?.charAt(0)?.toUpperCase() || 'U'}
+                </div>
+                <span className="text-sm text-gray-900">{member.name || member.email}</span>
+                {member.isOwner && (
+                  <span className="text-xs bg-green-100 text-green-800 px-1 rounded">Owner</span>
+                )}
+              </div>
+              {!member.isOwner && (
+                <button
+                  type="button"
+                  onClick={() => removeMember(member)}
+                  className="p-1 text-red-600 hover:text-red-800"
+                  title="Remove member"
+                >
+                  <UserMinus className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Invite New Members */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-gray-900">Invite New Members</h4>
+        {newInviteEmails.map((email, index) => (
+          <div key={index} className="flex items-center space-x-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => updateEmail(index, e.target.value)}
+              placeholder="Enter email address"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+            {newInviteEmails.length > 1 && (
+              <button
+                type="button"
+                onClick={() => removeEmailField(index)}
+                className="p-2 text-red-600 hover:text-red-800"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addEmailField}
+          className="text-blue-600 hover:text-blue-800 text-sm font-medium flex items-center space-x-1"
+        >
+          <UserPlus className="w-4 h-4" />
+          <span>Add another email</span>
+        </button>
+      </div>
+      
+      <div className="flex space-x-3 pt-4">
+        <button
+          type="button"
+          onClick={onClose}
+          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium"
+        >
+          {loading ? 'Updating...' : 'Update Room'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
